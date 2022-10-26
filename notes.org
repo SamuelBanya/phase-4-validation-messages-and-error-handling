@@ -1,0 +1,781 @@
+* Notes
+I used these commands to setup this lab:
+#+begin_src bash
+bundle install
+rails db:migrate db:seed
+rails s
+#+end_src
+
+I then opened up a new terminal, and did the following two commands to install and run the React frontend application:
+#+begin_src bash
+npm install --prefix client
+npm start --prefix client
+#+end_src
+
+I then added server side validations to the 'Movie' model within the 'app/models/movie.rb' model file:
+#+begin_src ruby
+class Movie < ApplicationRecord
+    CATEGORIES = ["Comedy", "Drama", "Animation", "Mystery", "Horror", "Fantasy", "Action", "Documentary", "Science Fiction"]
+
+    validates :title, presence: true
+    validates :year, numericality: {
+        greater_than_or_equal_to: 1888,
+        less_than_or_equal_to: Date.today.year
+    }
+    validates :poster_url, presence: true
+    validates :category, inclusion: {
+        in: CATEGORIES,
+        message: "must be one of #{CATEGORIES.join(', ')}"
+    }
+end
+#+end_src
+
+I then updated the 'app/controllers/movies_controller.rb' controller with the following revisions to include a 'rescue ActiveRecord::RecordInvalid => e' clause:
+#+begin_src ruby
+class MoviesController < ApplicationController
+  wrap_parameters false
+
+  def index
+    movies = Movie.all
+    render json: movies, status: :created
+    rescue ActiveRecord::RecordInvalid => e
+      render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+  end
+
+  def create
+    movie = Movie.create(movie_params)
+    render json: movie, status: :created
+  end
+
+  private
+
+  def movie_params
+    params.permit(:title, :year, :length, :director, :description, :poster_url, :category, :discount, :female_director)
+  end
+
+end
+#+end_src
+
+I then refreshed the React frontend's 'http://localhost:4000/new' URL and clicked 'Submit' for an empty movie form and received the following response in the Chrome developer console:
+#+begin_src bash
+Failed to load resource: the server responded with a status of 404 ()
+#+end_src
+
+I then revised the 'client/src/components/MovieForm.js' component's fetch request to just console.log() the response:
+#+begin_src js
+import { useState } from "react";
+import styled from "styled-components";
+
+function MovieForm() {
+  const [formData, setFormData] = useState({
+    title: "",
+    year: new Date().getFullYear(),
+    length: "0",
+    director: "",
+    description: "",
+    poster_url: "",
+    category: "",
+    discount: false,
+    female_director: false,
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    fetch("/movies", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    })
+      .then((response) => console.log(response))
+  }
+
+  function handleChange(e) {
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setFormData({
+      ...formData,
+      [e.target.id]: value,
+    });
+  }
+
+  return (
+    <Wrapper>
+      <form onSubmit={handleSubmit}>
+        <FormGroup>
+          <label htmlFor="title">Title</label>
+          <input
+            type="text"
+            id="title"
+            value={formData.title}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="year">Year</label>
+          <input
+            type="number"
+            id="year"
+            min="1888"
+            max={new Date().getFullYear()}
+            value={formData.year}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="length">Length</label>
+          <input
+            type="number"
+            id="length"
+            value={formData.length}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="director">Director</label>
+          <input
+            type="text"
+            id="director"
+            value={formData.director}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="description">Description</label>
+          <textarea
+            id="description"
+            value={formData.description}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="poster_url">Poster</label>
+          <input
+            type="text"
+            id="poster_url"
+            value={formData.poster_url}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="category">Category</label>
+          <input
+            type="text"
+            id="category"
+            value={formData.category}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="discount">
+            Discount?
+            <input
+              type="checkbox"
+              id="discount"
+              checked={formData.discount}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="female_director">
+            Female Director?
+            <input
+              type="checkbox"
+              id="female_director"
+              checked={formData.female_director}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        <SubmitButton type="submit">Add Movie</SubmitButton>
+      </form>
+    </Wrapper>
+  );
+}
+
+const Wrapper = styled.section`
+  max-width: 500px;
+  margin: 32px auto;
+  padding: 32px;
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+`;
+
+const SubmitButton = styled.button`
+  background: blue;
+  color: yellow;
+  font-weight: bold;
+  font-family: inherit;
+  font-size: 1.2rem;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+`;
+
+export default MovieForm;
+#+end_src
+
+I then refreshed the same 'http://localhost:4000/new' URL, submitted a blank form with the 'Submit' button, and received the following response, which I noticed the '.ok' property to use for error handling on the frontend side later on:
+#+begin_src json
+Response {type: 'basic', url: 'http://localhost:4000/movies', redirected: false, status: 201, ok: true, …}
+body
+:
+(...)
+bodyUsed
+:
+false
+headers
+:
+Headers {}
+ok
+:
+true
+redirected
+:
+false
+status
+:
+201
+statusText
+:
+"Created"
+type
+:
+"basic"
+url
+:
+"http://localhost:4000/movies"
+[[Prototype]]
+:
+Response
+#+end_src
+
+I then revised the 'client/src/components/MovieForm.js' component to include another state variable called 'errors' for the response itself for the form submission:
+#+begin_src js
+import { useState } from "react";
+import styled from "styled-components";
+
+function MovieForm() {
+  const [errors, setErrors] = useState([]);
+  const [formData, setFormData] = useState({
+    title: "",
+    year: new Date().getFullYear(),
+    length: "0",
+    director: "",
+    description: "",
+    poster_url: "",
+    category: "",
+    discount: false,
+    female_director: false,
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    fetch("/movies", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    })
+    .then((response) => {
+      if (response.ok) {
+        response.json().then((newMovie) => console.log(newMovie));
+      } else {
+        response.json().then((errorData) => setErrors(errorData.errors));
+      }
+
+    })
+  }
+
+  function handleChange(e) {
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setFormData({
+      ...formData,
+      [e.target.id]: value,
+    });
+  }
+
+  return (
+    <Wrapper>
+      <form onSubmit={handleSubmit}>
+        <FormGroup>
+          <label htmlFor="title">Title</label>
+          <input
+            type="text"
+            id="title"
+            value={formData.title}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="year">Year</label>
+          <input
+            type="number"
+            id="year"
+            min="1888"
+            max={new Date().getFullYear()}
+            value={formData.year}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="length">Length</label>
+          <input
+            type="number"
+            id="length"
+            value={formData.length}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="director">Director</label>
+          <input
+            type="text"
+            id="director"
+            value={formData.director}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="description">Description</label>
+          <textarea
+            id="description"
+            value={formData.description}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="poster_url">Poster</label>
+          <input
+            type="text"
+            id="poster_url"
+            value={formData.poster_url}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="category">Category</label>
+          <input
+            type="text"
+            id="category"
+            value={formData.category}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="discount">
+            Discount?
+            <input
+              type="checkbox"
+              id="discount"
+              checked={formData.discount}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="female_director">
+            Female Director?
+            <input
+              type="checkbox"
+              id="female_director"
+              checked={formData.female_director}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        <SubmitButton type="submit">Add Movie</SubmitButton>
+      </form>
+    </Wrapper>
+  );
+}
+
+const Wrapper = styled.section`
+  max-width: 500px;
+  margin: 32px auto;
+  padding: 32px;
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+`;
+
+const SubmitButton = styled.button`
+  background: blue;
+  color: yellow;
+  font-weight: bold;
+  font-family: inherit;
+  font-size: 1.2rem;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+`;
+
+export default MovieForm;
+#+end_src
+
+I then modified the same 'client/src/components/MovieForm.js' component with the following revision to the JSX form being returned to conditionally render the errors on the frontend webpage as well:
+#+begin_src js
+import { useState } from "react";
+import styled from "styled-components";
+
+function MovieForm() {
+  const [errors, setErrors] = useState([]);
+  const [formData, setFormData] = useState({
+    title: "",
+    year: new Date().getFullYear(),
+    length: "0",
+    director: "",
+    description: "",
+    poster_url: "",
+    category: "",
+    discount: false,
+    female_director: false,
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    fetch("/movies", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    })
+    .then((response) => {
+      if (response.ok) {
+        response.json().then((newMovie) => console.log(newMovie));
+      } else {
+        response.json().then((errorData) => setErrors(errorData.errors));
+      }
+
+    })
+  }
+
+  function handleChange(e) {
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setFormData({
+      ...formData,
+      [e.target.id]: value,
+    });
+  }
+
+  return (
+    <Wrapper>
+      <form onSubmit={handleSubmit}>
+        <FormGroup>
+          <label htmlFor="title">Title</label>
+          <input
+            type="text"
+            id="title"
+            value={formData.title}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="year">Year</label>
+          <input
+            type="number"
+            id="year"
+            min="1888"
+            max={new Date().getFullYear()}
+            value={formData.year}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="length">Length</label>
+          <input
+            type="number"
+            id="length"
+            value={formData.length}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="director">Director</label>
+          <input
+            type="text"
+            id="director"
+            value={formData.director}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="description">Description</label>
+          <textarea
+            id="description"
+            value={formData.description}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="poster_url">Poster</label>
+          <input
+            type="text"
+            id="poster_url"
+            value={formData.poster_url}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="category">Category</label>
+          <input
+            type="text"
+            id="category"
+            value={formData.category}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="discount">
+            Discount?
+            <input
+              type="checkbox"
+              id="discount"
+              checked={formData.discount}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="female_director">
+            Female Director?
+            <input
+              type="checkbox"
+              id="female_director"
+              checked={formData.female_director}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        {errors.length > 0 && (
+          <ul style={{ color: "red" }}>
+            {errors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        )}
+        <SubmitButton type="submit">Add Movie</SubmitButton>
+      </form>
+    </Wrapper>
+  );
+}
+
+const Wrapper = styled.section`
+  max-width: 500px;
+  margin: 32px auto;
+  padding: 32px;
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+`;
+
+const SubmitButton = styled.button`
+  background: blue;
+  color: yellow;
+  font-weight: bold;
+  font-family: inherit;
+  font-size: 1.2rem;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+`;
+
+export default MovieForm;
+
+#+end_src
+
+I then refactored the code within the 'client/src/components/MovieForm.js' component so that the 'handleSubmit' function was an 'async' function instead:
+#+begin_src js
+import { useState } from "react";
+import styled from "styled-components";
+
+function MovieForm() {
+  const [errors, setErrors] = useState([]);
+  const [formData, setFormData] = useState({
+    title: "",
+    year: new Date().getFullYear(),
+    length: "0",
+    director: "",
+    description: "",
+    poster_url: "",
+    category: "",
+    discount: false,
+    female_director: false,
+  });
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const response = await fetch("/movies", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    });
+    // response.json() returns a Promise so we must await it:
+    const data = await response.json();
+    if (response.ok) {
+      console.log("Movie created: ", data);
+    } else {
+      setErrors(data.errors);
+    }
+  }
+
+  function handleChange(e) {
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setFormData({
+      ...formData,
+      [e.target.id]: value,
+    });
+  }
+
+  return (
+    <Wrapper>
+      <form onSubmit={handleSubmit}>
+        <FormGroup>
+          <label htmlFor="title">Title</label>
+          <input
+            type="text"
+            id="title"
+            value={formData.title}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="year">Year</label>
+          <input
+            type="number"
+            id="year"
+            min="1888"
+            max={new Date().getFullYear()}
+            value={formData.year}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="length">Length</label>
+          <input
+            type="number"
+            id="length"
+            value={formData.length}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="director">Director</label>
+          <input
+            type="text"
+            id="director"
+            value={formData.director}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="description">Description</label>
+          <textarea
+            id="description"
+            value={formData.description}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="poster_url">Poster</label>
+          <input
+            type="text"
+            id="poster_url"
+            value={formData.poster_url}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="category">Category</label>
+          <input
+            type="text"
+            id="category"
+            value={formData.category}
+            onChange={handleChange}
+          />
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="discount">
+            Discount?
+            <input
+              type="checkbox"
+              id="discount"
+              checked={formData.discount}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        <FormGroup>
+          <label htmlFor="female_director">
+            Female Director?
+            <input
+              type="checkbox"
+              id="female_director"
+              checked={formData.female_director}
+              onChange={handleChange}
+            />
+          </label>
+        </FormGroup>
+        {errors.length > 0 && (
+          <ul style={{ color: "red" }}>
+            {errors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        )}
+        <SubmitButton type="submit">Add Movie</SubmitButton>
+      </form>
+    </Wrapper>
+  );
+}
+
+const Wrapper = styled.section`
+  max-width: 500px;
+  margin: 32px auto;
+  padding: 32px;
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+`;
+
+const SubmitButton = styled.button`
+  background: blue;
+  color: yellow;
+  font-weight: bold;
+  font-family: inherit;
+  font-size: 1.2rem;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+`;
+
+export default MovieForm;
+#+end_src
+
+Answers To Check Your Understanding:
+- Q1. How can we differentiate between a successful and unsuccessful response using fetch?
+- Answer: We can use the '.ok' method to either create an 'if else' block with a normal fetch request to return the proper JSON response, or create an 'async' function to 'await' the response appropriately with the '.ok' method being used to check if its valid or not
+- Q2. Why might it be important to display validation error messages to our users?
+- Answer: This would be important so that they wouldn't have to make the same mistake again over an over, and to prevent any typical user errors
